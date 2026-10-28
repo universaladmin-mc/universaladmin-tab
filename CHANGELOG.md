@@ -2,7 +2,7 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [1.7.0] - Unreleased
+## [1.7.0] - 2026-10-28
 
 ### Added
 
