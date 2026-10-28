@@ -1,0 +1,110 @@
+name: Release
+
+# A v* tag builds the extension, attaches universaladmin-tab-<version>.jar (+ .sha256)
+# to a GitHub release - where UniversalAdmin's update check finds it - and
+# uploads it to its Modrinth project (the repository variable MODRINTH_PROJECT_ID).
+# The Minecraft versions are UniversalAdmin's (supported-versions.txt in the
+# core repository).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 25 (build toolchain) and 21 (runs Gradle)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            25
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Verify tag matches the project version
+        id: version
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PROJECT_VERSION="$(./gradlew -q --console=plain printVersion \
+            -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64)"
+          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match the project version '$PROJECT_VERSION' in build.gradle.kts."
+            exit 1
+          fi
+          echo "version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: >-
+          ./gradlew clean build --console=plain
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64
+
+      - name: Checksum
+        id: artifact
+        run: |
+          set -euo pipefail
+          JAR="build/libs/universaladmin-tab-${{ steps.version.outputs.version }}.jar"
+          test -f "$JAR"
+          ( cd build/libs && sha256sum "$(basename "$JAR")" > "$(basename "$JAR").sha256" )
+          echo "jar=$JAR" >> "$GITHUB_OUTPUT"
+
+      - name: Read supported Minecraft versions
+        id: games
+        run: |
+          set -euo pipefail
+          {
+            echo "list<<GAMES_EOF"
+            curl -fsS https://raw.githubusercontent.com/universaladmin-mc/UniversalAdmin/main/supported-versions.txt \
+              | grep -vE '^\s*(#|$)'
+            echo "GAMES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Release notes
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          awk -v version="## [${VERSION}]" '
+            index($0, version) == 1 { collecting = 1; next }
+            collecting && /^## / { exit }
+            collecting { print }
+          ' CHANGELOG.md > release-notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" "${{ steps.artifact.outputs.jar }}" "${{ steps.artifact.outputs.jar }}.sha256" \
+            --title "UniversalAdmin TAB ${VERSION}" --notes-file release-notes.md
+
+      - name: Publish to Modrinth
+        uses: Kira-NT/mc-publish@v3
+        with:
+          modrinth-id: ${{ vars.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: ${{ steps.artifact.outputs.jar }}
+          name: UniversalAdmin TAB ${{ steps.version.outputs.version }}
+          version: ${{ steps.version.outputs.version }}
+          changelog-file: release-notes.md
+          loaders: |
+            paper
+            purpur
+          game-versions: ${{ steps.games.outputs.list }}
+          dependencies: |
+            universaladmin(required){modrinth:wGP5uSse}
+            tab-was-taken(required){modrinth:gG7VFbG0}
+          java: 21
+          fail-mode: warn

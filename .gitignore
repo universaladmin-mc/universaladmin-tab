@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+out/
+# The wrapper jar is committed on purpose so `./gradlew` works on a fresh clone.
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Local-only notes
+.claude/
+CLAUDE.md
+
+# OS
+.DS_Store
+Thumbs.db

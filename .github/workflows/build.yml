@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 25 (build toolchain) and 21 (runs Gradle)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            25
+            21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build and test
+        run: >-
+          ./gradlew clean build --console=plain
+          -Porg.gradle.java.installations.fromEnv=JAVA_HOME_25_X64
+
+      - name: Upload the jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: universaladmin-tab
+          path: build/libs/universaladmin-tab-*.jar
+          if-no-files-found: error

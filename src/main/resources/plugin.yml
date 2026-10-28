@@ -1,0 +1,7 @@
+name: UniversalAdminTAB
+version: '${version}'
+main: dev.universaladmin.tab.TabPlugin
+api-version: '1.21.7'
+description: TAB for UniversalAdmin - the tab list and name tags follow nicks, vanish and staff mode.
+website: https://universaladmin-mc.github.io/UniversalAdmin/extensions/tab/
+depend: [UniversalAdmin, TAB]
